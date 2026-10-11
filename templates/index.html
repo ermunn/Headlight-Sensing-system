@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Headlight UV Measurement</title>
+
+	<meta http-equiv="refresh" content="3">
+
+</head>
+
+<body>
+<h1>Headlight UV Measurement System</h1>
+
+<h2>Add Measurement</h2>
+
+<form action="/add" method="POST">
+
+	<label>Plate Number:</label>
+	<input type="text" name="plate_number" required>
+
+	<br><br>
+	
+	<label>UV Value:</label>
+	<input  type="number"
+		name="uv_value"
+		step="0.001"
+		required>
+	
+	<br><br>
+
+	<label>Unit:</label>
+	<input  type="text"
+		name="unit"
+		value="mW/cm^2"
+		required>
+
+	<br><br>
+
+	<label>Limit:</label>
+	<input  type="number"
+		name="limit_value"
+		step="0.001"
+		value="1.000"
+		required>
+
+	<br><br>
+
+	<button type="submit">SAVE</button>
+
+</form>
+
+<hr>
+
+<h2>Measurements</h2>
+
+<table border= "1">
+	<tr>
+		<th>Plate</th>
+		<th>Date</th>
+		<th>UV Value</th>
+		<th>Unit</th>
+		<th>Limit</th>
+		<th>Status</th>
+	</tr>
+
+	{%for measurement in measurements %}
+	<tr>
+		<td>{{ measurement[0] }}</td>
+		<td>{{ measurement[1] }}</td>
+		<td>{{ measurement[2] }}</td>
+		<td>{{ measurement[3] }}</td>
+		<td>{{ measurement[4] }}</td>
+		<td>{{ measurement[5] }}</td>
+	</tr>
+	{% endfor %}
+
+</table>
+
+</body>
+</html>
+
