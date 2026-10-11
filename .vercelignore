@@ -1,0 +1,10 @@
+__pycache__/
+.venv/
+.history/
+.uv-cache/
+.claude/
+.env
+.env.*
+test_app.py
+test_db.py
+esp32_sensor/

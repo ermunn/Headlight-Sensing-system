@@ -1,24 +1,36 @@
-import mariadb
+import os
 
-try:
-	conn = mariadb.connect(
-		host = "localhost",
-		user = "HL_admin",
-		password = "teee123456",
-		database = "headlight_system"
-	)
 
-	print("Successfully connected to MariaDB!")
+def main():
+	import psycopg
 
-	cursor = conn.cursor()
-	cursor.execute("SHOW TABLES")
+	try:
+		database_url = os.getenv("DATABASE_URL")
+		if not database_url:
+			raise RuntimeError("DATABASE_URL environment variable is not set")
 
-	print("Tables:")
-	for table in cursor:
-		print(table)
+		conn = psycopg.connect(database_url)
 
-	cursor.close()
-	conn.close()
+		print("Successfully connected to Neon Postgres!")
 
-except mariadb.Error as e:
-	print(f"Error connecting to MariaDB: {e}")
+		cursor = conn.cursor()
+		cursor.execute("""
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = 'public'
+			ORDER BY table_name
+		""")
+
+		print("Tables:")
+		for table in cursor:
+			print(table)
+
+		cursor.close()
+		conn.close()
+
+	except (psycopg.Error, RuntimeError) as e:
+		print(f"Error connecting to Neon Postgres: {e}")
+
+
+if __name__ == "__main__":
+	main()
