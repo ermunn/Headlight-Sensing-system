@@ -1,4 +1,7 @@
 import os
+import re
+import hmac
+import uuid
 
 from flask import Flask, render_template, request, redirect, jsonify
 import psycopg
@@ -38,14 +41,17 @@ def fetch_measurements():
 
 	try:
 		cursor.execute("""
-			SELECT plate_number,
-			       measured_at,
-			       uv_value,
-			       unit,
-			       limit_value,
-			       status
-			FROM measurements
-			ORDER BY measured_at DESC
+			SELECT m.plate_number,
+			       m.measured_at,
+			       m.uv_value,
+			       m.unit,
+			       m.limit_value,
+			       m.status,
+			       (SELECT p.photo_url FROM photos p
+			        WHERE p.measurement_id = m.id
+			        ORDER BY p.captured_at DESC LIMIT 1)
+			FROM measurements m
+			ORDER BY m.measured_at DESC
 		""")
 		return cursor.fetchall()
 	finally:
@@ -96,6 +102,83 @@ def home():
 		return f"Database error: {error}", 500
 
 	return render_template("index.html", measurements=measurements)
+
+
+@app.route("/api/photos", methods=["POST"])
+def api_upload_photo():
+	"""Store a raw JPEG in Vercel Blob and link it to the plate's latest measurement."""
+	expected_token = os.getenv("PHOTO_UPLOAD_TOKEN", "")
+	provided_token = request.headers.get("X-Upload-Token", "")
+	if not expected_token:
+		return jsonify({"success": False, "error": "Photo uploads are not configured"}), 503
+	if not hmac.compare_digest(provided_token, expected_token):
+		return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+	content_type = request.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+	if content_type != "image/jpeg":
+		return jsonify({"success": False, "error": "Content-Type must be image/jpeg"}), 415
+
+	plate_number = request.headers.get("X-Plate-Number", "").strip()
+	if not plate_number or len(plate_number) > 64:
+		return jsonify({"success": False, "error": "A valid X-Plate-Number header is required"}), 400
+
+	max_photo_bytes = 4_400_000
+	if request.content_length is not None and request.content_length > max_photo_bytes:
+		return jsonify({"success": False, "error": "JPEG must be smaller than 4.4 MB"}), 413
+
+	image_bytes = request.get_data(cache=False)
+	if len(image_bytes) < 4 or len(image_bytes) > max_photo_bytes:
+		return jsonify({"success": False, "error": "JPEG is empty or exceeds the 4.4 MB limit"}), 413
+	if not image_bytes.startswith(b"\xff\xd8") or not image_bytes.endswith(b"\xff\xd9"):
+		return jsonify({"success": False, "error": "Request body is not a valid JPEG"}), 400
+
+	try:
+		from vercel.blob import BlobClient
+
+		plate_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", plate_number)[:64] or "unknown"
+		pathname = f"headlight-photos/{plate_slug}/{uuid.uuid4().hex}.jpg"
+		blob = BlobClient().put(
+			pathname,
+			image_bytes,
+			access="public",
+			content_type="image/jpeg",
+			add_random_suffix=True,
+		)
+	except Exception:
+		app.logger.exception("Photo upload to Vercel Blob failed")
+		return jsonify({"success": False, "error": "Could not store photo"}), 502
+
+	conn = get_db_connection()
+	cursor = conn.cursor()
+	try:
+		cursor.execute("""
+			INSERT INTO photos
+			(measurement_id, plate_number, photo_url, pathname, content_type, file_size)
+			VALUES (
+				(SELECT id FROM measurements WHERE plate_number = %s ORDER BY measured_at DESC LIMIT 1),
+				%s, %s, %s, 'image/jpeg', %s
+			)
+			RETURNING id, measurement_id, captured_at
+		""", (plate_number, plate_number, blob.url, blob.pathname, len(image_bytes)))
+		photo_id, measurement_id, captured_at = cursor.fetchone()
+		conn.commit()
+	except (psycopg.Error, RuntimeError) as error:
+		conn.rollback()
+		app.logger.exception("Could not save photo metadata")
+		return jsonify({"success": False, "error": "Photo stored, but metadata could not be saved"}), 500
+	finally:
+		cursor.close()
+		conn.close()
+
+	return jsonify({
+		"success": True,
+		"id": photo_id,
+		"measurement_id": measurement_id,
+		"plate_number": plate_number,
+		"photo_url": blob.url,
+		"captured_at": str(captured_at),
+		"file_size": len(image_bytes),
+	}), 201
 
 @app.route("/add", methods = ["POST"])
 def add_measurement():

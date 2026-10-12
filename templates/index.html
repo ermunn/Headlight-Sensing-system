@@ -60,6 +60,7 @@
 		<th>Unit</th>
 		<th>Limit</th>
 		<th>Status</th>
+		<th>Photo</th>
 	</tr>
 
 	{%for measurement in measurements %}
@@ -70,6 +71,16 @@
 		<td>{{ measurement[3] }}</td>
 		<td>{{ measurement[4] }}</td>
 		<td>{{ measurement[5] }}</td>
+		<td>
+			{% if measurement[6] %}
+				<a href="{{ measurement[6] }}" target="_blank" rel="noopener">Open photo</a><br>
+				<a href="{{ measurement[6] }}" target="_blank" rel="noopener">
+					<img src="{{ measurement[6] }}" alt="{{ measurement[0] }} headlight photo" width="160" loading="lazy">
+				</a>
+			{% else %}
+				No photo
+			{% endif %}
+		</td>
 	</tr>
 	{% endfor %}
 

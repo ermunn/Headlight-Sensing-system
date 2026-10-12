@@ -2,6 +2,7 @@
 #include <WiFiManager.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include "ybcam.h"
 
 // -------------------- LDR CONFIGURATION --------------------
 const int LDR_PIN = 4;
@@ -10,6 +11,12 @@ const int LDR_PIN = 4;
 // Flask API deployed on Vercel. It saves each measurement to the Neon database.
 const char* SERVER_URL =
     "https://headlight-sensing-system.vercel.app/api/measurements";
+
+// Configure this endpoint on your server to accept a raw image/jpeg POST.
+const char* PHOTO_UPLOAD_URL =
+    "https://headlight-sensing-system.vercel.app/api/photos";
+// Set the same long random value as the Vercel PHOTO_UPLOAD_TOKEN environment variable.
+const char* PHOTO_UPLOAD_TOKEN = "___PHOTO_UPLOAD_TOKEN___hjkiuoyugvbjn89y765476879809uiHJBHVGFYTGHUJBH";
 
 // Root certificate used to verify the Vercel server over HTTPS
 // (GTS Root R1, valid until 2036-06-22).
@@ -55,9 +62,21 @@ const char* PLATE_NUMBER = "ESP32_TEST";
 // Send data every 5 seconds
 const unsigned long SEND_INTERVAL = 5000;
 
+// Yahboom camera wiring: camera TX -> ESP32 GPIO16, camera RX -> GPIO17.
+const int CAM_RX_PIN = 16;
+const int CAM_TX_PIN = 17;
+const uint32_t USB_SERIAL_BAUD = 115200;
+const char* PHOTO_SIZE = "VGA";
+const int PHOTO_QUALITY = 55;
+
 WiFiManager wifiManager;
 
 unsigned long previousSendTime = 0;
+YbCam cam;
+char commandLine[32];
+size_t commandLength = 0;
+uint32_t photoNumber = 0;
+bool cameraReady = false;
 
 
 // -------------------- WIFI SETUP --------------------
@@ -151,9 +170,91 @@ void sendMeasurement(int ldrValue, float voltage) {
 }
 
 
+// -------------------- CAPTURE AND UPLOAD PHOTO --------------------
+void captureAndUploadPhoto() {
+  if (!cameraReady) {
+    Serial.println("ERROR camera is not ready; check camera wiring and power.");
+    return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("ERROR Wi-Fi is disconnected; photo not uploaded.");
+    return;
+  }
+
+  Serial.println("Taking photo...");
+  if (!cam.takePhoto(PHOTO_SIZE, PHOTO_QUALITY, 20000)) {
+    Serial.print("ERROR camera: ");
+    Serial.println(cam.text());
+    return;
+  }
+
+  const YbFrame &frame = cam.frame();
+  if (!frame.data || frame.len < 4 || frame.data[0] != 0xFF ||
+      frame.data[1] != 0xD8 || frame.data[frame.len - 2] != 0xFF ||
+      frame.data[frame.len - 1] != 0xD9) {
+    Serial.println("ERROR camera returned an invalid JPEG.");
+    return;
+  }
+
+  WiFiClientSecure client;
+  client.setCACert(ROOT_CA);
+  HTTPClient http;
+  http.setConnectTimeout(15000);
+  http.setTimeout(30000);
+
+  if (!http.begin(client, PHOTO_UPLOAD_URL)) {
+    Serial.println("ERROR could not initialize photo upload request.");
+    return;
+  }
+
+  http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("X-Plate-Number", PLATE_NUMBER);
+  http.addHeader("X-Photo-Number", String(photoNumber + 1));
+  http.addHeader("X-Upload-Token", PHOTO_UPLOAD_TOKEN);
+  Serial.printf("Uploading JPEG (%lu bytes)...\n", (unsigned long)frame.len);
+  int status = http.POST(frame.data, frame.len);
+  Serial.printf("Photo upload HTTP status: %d\n", status);
+  if (status > 0) {
+    Serial.println(http.getString());
+    if (status >= 200 && status < 300) ++photoNumber;
+  } else {
+    Serial.print("Upload error: ");
+    Serial.println(http.errorToString(status));
+  }
+  http.end();
+}
+
+
+// Read newline-terminated commands from the USB serial monitor.
+void processSerialCommands() {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (commandLength == 0) continue;
+      commandLine[commandLength] = '\0';
+      if (!strcmp(commandLine, "photo")) {
+        captureAndUploadPhoto();
+      } else if (!strcmp(commandLine, "help")) {
+        Serial.println("Commands: photo, help");
+      } else {
+        Serial.print("Unknown command: ");
+        Serial.println(commandLine);
+        Serial.println("Type help for commands.");
+      }
+      commandLength = 0;
+    } else if (commandLength < sizeof(commandLine) - 1) {
+      commandLine[commandLength++] = c;
+    } else {
+      commandLength = 0;
+      Serial.println("ERROR command too long.");
+    }
+  }
+}
+
+
 // -------------------- SETUP --------------------
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(USB_SERIAL_BAUD);
   delay(500);
 
   analogReadResolution(12);
@@ -162,12 +263,24 @@ void setup() {
 
   connectWiFi();
 
-  Serial.println("System ready!");
+  if (!cam.begin(CAM_RX_PIN, CAM_TX_PIN)) {
+    Serial.println("ERROR camera buffer allocation failed.");
+  } else if (!cam.command("INFO", 5000)) {
+    Serial.print("ERROR camera link: ");
+    Serial.println(cam.text());
+  } else {
+    cameraReady = true;
+    Serial.println("Yahboom camera ready.");
+  }
+
+  Serial.println("System ready. Send 'photo' in Serial Monitor to capture and upload.");
 }
 
 
 // -------------------- MAIN LOOP --------------------
 void loop() {
+  processSerialCommands();
+
   unsigned long currentTime = millis();
 
   if (currentTime - previousSendTime >= SEND_INTERVAL) {
