@@ -16,7 +16,7 @@ const char* SERVER_URL =
 const char* PHOTO_UPLOAD_URL =
     "https://headlight-sensing-system.vercel.app/api/photos";
 // Set the same long random value as the Vercel PHOTO_UPLOAD_TOKEN environment variable.
-const char* PHOTO_UPLOAD_TOKEN = "___PHOTO_UPLOAD_TOKEN___hjkiuoyugvbjn89y765476879809uiHJBHVGFYTGHUJBH";
+const char* PHOTO_UPLOAD_TOKEN = "___PHOTO_UPLOAD_TOKEN___hjkiuoyugvbjn89y765476879809uiHJBHVGFYTGHUJBHMIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjEwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAw";
 
 // Root certificate used to verify the Vercel server over HTTPS
 // (GTS Root R1, valid until 2036-06-22).
