@@ -71,7 +71,14 @@
 			<td>{{ measurement[5] }}</td>
 			<td>
 				{% if measurement[6] %}
-					Photo uploaded
+					<a href="{{ url_for('show_photo', photo_id=measurement[6]) }}"
+					   target="_blank" rel="noopener">
+						<img
+							src="{{ url_for('show_photo', photo_id=measurement[6]) }}"
+							alt="Vehicle photo"
+							width="200"
+							loading="lazy">
+					</a>
 				{% else %}
 					No photo
 				{% endif %}

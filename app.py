@@ -3,7 +3,9 @@ import re
 import hmac
 import uuid
 
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import (
+	Flask, render_template, request, redirect, jsonify, Response, abort
+)
 import psycopg
 
 app = Flask(__name__)
@@ -47,7 +49,7 @@ def fetch_measurements():
 			       m.unit,
 			       m.limit_value,
 			       m.status,
-			       (SELECT p.photo_url FROM photos p
+			       (SELECT p.id FROM photos p
 			        WHERE p.measurement_id = m.id
 			        ORDER BY p.captured_at DESC LIMIT 1)
 			FROM measurements m
@@ -256,6 +258,40 @@ def api_add_measurements():
 @app.route("/health")
 def health():
 	return jsonify({"success": True, "status": "ok"})
+
+
+@app.route("/photos/<int:photo_id>")
+def show_photo(photo_id):
+	from vercel.blob.sync import get_blob
+	from vercel.blob.errors import BlobNotFoundError
+
+	with get_db_connection() as conn:
+		with conn.cursor() as cursor:
+			cursor.execute(
+				"SELECT pathname FROM photos WHERE id = %s",
+				(photo_id,)
+			)
+			photo = cursor.fetchone()
+
+	if photo is None:
+		abort(404)
+
+	try:
+		result = get_blob(photo[0], access="private")
+	except BlobNotFoundError:
+		abort(404)
+	except Exception:
+		app.logger.exception("Could not read photo")
+		return "Could not load photo", 502
+
+	return Response(
+		result.body,
+		mimetype="image/jpeg",
+		headers={
+			"Cache-Control": "private, no-store",
+			"X-Content-Type-Options": "nosniff",
+		},
+	)
 
 
 if __name__ == "__main__":
