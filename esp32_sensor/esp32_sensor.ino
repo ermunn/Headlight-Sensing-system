@@ -14,7 +14,7 @@ const char* SERVER_URL =
 
 // Configure this endpoint on your server to accept a raw image/jpeg POST.
 const char* PHOTO_UPLOAD_URL =
-    "https://headlight-sensing-system.vercel.app/api/photos";
+    "https://headlightsensingsystem.vercel.app/api/photos";
 // Set the same long random value as the Vercel PHOTO_UPLOAD_TOKEN environment variable.
 const char* PHOTO_UPLOAD_TOKEN = "___PHOTO_UPLOAD_TOKEN___hjkiuoyugvbjn89y765476879809uiHJBHVGFYTGHUJBHMIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjEwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAw";
 
@@ -281,7 +281,7 @@ void setup() {
 void loop() {
   processSerialCommands();
 
-  unsigned long currentTime = millis();
+  /*unsigned long currentTime = millis();
 
   if (currentTime - previousSendTime >= SEND_INTERVAL) {
     previousSendTime = currentTime;
@@ -294,7 +294,7 @@ void loop() {
 
     // Send measurement to Flask API
     sendMeasurement(ldrValue, voltage);
-  }
+  }*/
 
   // Attempt to reconnect if Wi-Fi drops
   if (WiFi.status() != WL_CONNECTED) {

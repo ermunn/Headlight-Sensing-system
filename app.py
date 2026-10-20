@@ -140,7 +140,7 @@ def api_upload_photo():
 		blob = put_blob(
 			pathname,
 			image_bytes,
-			access="public",
+			access="private",
 			content_type="image/jpeg",
 			add_random_suffix=True,
 		)
