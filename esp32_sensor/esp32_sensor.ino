@@ -10,7 +10,7 @@ const int LDR_PIN = 4;
 // -------------------- SERVER CONFIGURATION --------------------
 // Flask API deployed on Vercel. It saves each measurement to the Neon database.
 const char* SERVER_URL =
-    "https://headlight-sensing-system.vercel.app/api/measurements";
+    "https://headlightsensingsystem.vercel.app/api/measurements";
 
 // Configure this endpoint on your server to accept a raw image/jpeg POST.
 const char* PHOTO_UPLOAD_URL =
@@ -59,9 +59,6 @@ bP6MvPJwNQzcmRk13NfIRmPVNnGuV/u3gm3c
 // Temporary plate number for testing
 const char* PLATE_NUMBER = "ESP32_TEST";
 
-// Send data every 5 seconds
-const unsigned long SEND_INTERVAL = 5000;
-
 // Yahboom camera wiring: camera TX -> ESP32 GPIO16, camera RX -> GPIO17.
 const int CAM_RX_PIN = 16;
 const int CAM_TX_PIN = 17;
@@ -71,7 +68,6 @@ const int PHOTO_QUALITY = 55;
 
 WiFiManager wifiManager;
 
-unsigned long previousSendTime = 0;
 YbCam cam;
 char commandLine[32];
 size_t commandLength = 0;
@@ -113,10 +109,10 @@ int readLDR() {
 
 
 // -------------------- SEND DATA TO FLASK API (VERCEL) --------------------
-void sendMeasurement(int ldrValue, float voltage) {
+bool sendMeasurement(int ldrValue, float voltage) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Wi-Fi disconnected. Cannot send data.");
-    return;
+    return false;
   }
 
   // HTTPS connection, verified against ROOT_CA
@@ -125,7 +121,10 @@ void sendMeasurement(int ldrValue, float voltage) {
 
   HTTPClient http;
 
-  http.begin(client, SERVER_URL);
+  if (!http.begin(client, SERVER_URL)) {
+    Serial.println("ERROR could not initialize measurement request.");
+    return false;
+  }
   http.addHeader("Content-Type", "application/json");
 
   // HTTPS handshake plus a cold server start can take several seconds
@@ -167,11 +166,12 @@ void sendMeasurement(int ldrValue, float voltage) {
   }
 
   http.end();
+  return httpResponseCode >= 200 && httpResponseCode < 300;
 }
 
 
 // -------------------- CAPTURE AND UPLOAD PHOTO --------------------
-void captureAndUploadPhoto() {
+void sendPhotoAndMeasurement() {
   if (!cameraReady) {
     Serial.println("ERROR camera is not ready; check camera wiring and power.");
     return;
@@ -196,6 +196,14 @@ void captureAndUploadPhoto() {
     return;
   }
 
+  // Save a fresh measurement first so the photo links to it on the server.
+  int ldrValue = readLDR();
+  float voltage = ldrValue * (3.3f / 4095.0f);
+  if (!sendMeasurement(ldrValue, voltage)) {
+    Serial.println("ERROR measurement failed; photo upload cancelled. Try send again.");
+    return;
+  }
+
   WiFiClientSecure client;
   client.setCACert(ROOT_CA);
   HTTPClient http;
@@ -216,10 +224,16 @@ void captureAndUploadPhoto() {
   Serial.printf("Photo upload HTTP status: %d\n", status);
   if (status > 0) {
     Serial.println(http.getString());
-    if (status >= 200 && status < 300) ++photoNumber;
+    if (status >= 200 && status < 300) {
+      ++photoNumber;
+      Serial.println("DONE measurement and photo sent.");
+    } else {
+      Serial.println("ERROR measurement saved, but photo upload failed.");
+    }
   } else {
     Serial.print("Upload error: ");
     Serial.println(http.errorToString(status));
+    Serial.println("ERROR measurement saved, but photo upload failed.");
   }
   http.end();
 }
@@ -232,10 +246,10 @@ void processSerialCommands() {
     if (c == '\n' || c == '\r') {
       if (commandLength == 0) continue;
       commandLine[commandLength] = '\0';
-      if (!strcmp(commandLine, "photo")) {
-        captureAndUploadPhoto();
+      if (!strcmp(commandLine, "send")) {
+        sendPhotoAndMeasurement();
       } else if (!strcmp(commandLine, "help")) {
-        Serial.println("Commands: photo, help");
+        Serial.println("Commands: send, help");
       } else {
         Serial.print("Unknown command: ");
         Serial.println(commandLine);
@@ -273,28 +287,13 @@ void setup() {
     Serial.println("Yahboom camera ready.");
   }
 
-  Serial.println("System ready. Send 'photo' in Serial Monitor to capture and upload.");
+  Serial.println("System ready. Type 'send' in Serial Monitor to send a photo and measurement.");
 }
 
 
 // -------------------- MAIN LOOP --------------------
 void loop() {
   processSerialCommands();
-
-  /*unsigned long currentTime = millis();
-
-  if (currentTime - previousSendTime >= SEND_INTERVAL) {
-    previousSendTime = currentTime;
-
-    // Read sensor
-    int ldrValue = readLDR();
-
-    // Approximate voltage for a 3.3 V ADC range
-    float voltage = ldrValue * (3.3f / 4095.0f);
-
-    // Send measurement to Flask API
-    sendMeasurement(ldrValue, voltage);
-  }*/
 
   // Attempt to reconnect if Wi-Fi drops
   if (WiFi.status() != WL_CONNECTED) {
