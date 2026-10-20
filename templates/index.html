@@ -61,21 +61,22 @@
 		<th>Photo</th>
 	</tr>
 
-	{%for measurement in measurements %}
-	<tr>
-		<td>{{ measurement[0] }}</td>
-		<td>{{ measurement[1] }}</td>
-		<td>{{ measurement[2] }}</td>
-		<td>{{ measurement[3] }}</td>
-		<td>{{ measurement[4] }}</td>
-		<td>{{ measurement[5] }}</td>et="_blank" rel="noopener">
-					<img src="{{ measurement[6] }}" alt="{{ measurement[0] }} headlight photo" width="160" loading="lazy">
-				</a>
-			{% else %}
-				No photo
-			{% endif %}
-		</td>
-	</tr>
+	{% for measurement in measurements %}
+		<tr>
+			<td>{{ measurement[0] }}</td>
+			<td>{{ measurement[1] }}</td>
+			<td>{{ measurement[2] }}</td>
+			<td>{{ measurement[3] }}</td>
+			<td>{{ measurement[4] }}</td>
+			<td>{{ measurement[5] }}</td>
+			<td>
+				{% if measurement[6] %}
+					Photo uploaded
+				{% else %}
+					No photo
+				{% endif %}
+			</td>
+		</tr>
 	{% endfor %}
 
 </table>
