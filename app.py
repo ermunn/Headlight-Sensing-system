@@ -11,7 +11,7 @@ import psycopg
 app = Flask(__name__)
 
 DEFAULT_UNIT = "mW/cm^2"
-DEFAULT_LIMIT_VALUE = 1.000
+DEFAULT_LIMIT_VALUE = 2.000
 
 
 def get_db_connection():
