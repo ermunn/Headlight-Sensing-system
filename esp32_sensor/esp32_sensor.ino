@@ -6,6 +6,9 @@
 
 // -------------------- LDR CONFIGURATION --------------------
 const int LDR_PIN = 34;
+const float LDR_TRIGGER_VOLTAGE = 2.0f;
+const float LDR_REARM_VOLTAGE = 1.9f;
+const unsigned long LDR_SAMPLE_INTERVAL_MS = 100;
 
 // -------------------- SERVER CONFIGURATION --------------------
 // Flask API deployed on Vercel. It saves each measurement to the Neon database.
@@ -73,6 +76,8 @@ char commandLine[32];
 size_t commandLength = 0;
 uint32_t photoNumber = 0;
 bool cameraReady = false;
+bool ldrTriggerArmed = true;
+unsigned long lastLdrSampleMs = 0;
 
 
 // -------------------- WIFI SETUP --------------------
@@ -171,7 +176,7 @@ bool sendMeasurement(int ldrValue, float voltage) {
 
 
 // -------------------- CAPTURE AND UPLOAD PHOTO --------------------
-void sendPhotoAndMeasurement() {
+void sendPhotoAndMeasurement(int ldrValue, float voltage) {
   if (!cameraReady) {
     Serial.println("ERROR camera is not ready; check camera wiring and power.");
     return;
@@ -196,11 +201,9 @@ void sendPhotoAndMeasurement() {
     return;
   }
 
-  // Save a fresh measurement first so the photo links to it on the server.
-  int ldrValue = readLDR();
-  float voltage = ldrValue * (3.3f / 4095.0f);
+  // Save the reading that triggered capture so the photo links to that event.
   if (!sendMeasurement(ldrValue, voltage)) {
-    Serial.println("ERROR measurement failed; photo upload cancelled. Try send again.");
+    Serial.println("ERROR measurement failed; photo upload cancelled. Waiting for next threshold crossing.");
     return;
   }
 
@@ -246,10 +249,8 @@ void processSerialCommands() {
     if (c == '\n' || c == '\r') {
       if (commandLength == 0) continue;
       commandLine[commandLength] = '\0';
-      if (!strcmp(commandLine, "send")) {
-        sendPhotoAndMeasurement();
-      } else if (!strcmp(commandLine, "help")) {
-        Serial.println("Commands: send, help");
+      if (!strcmp(commandLine, "help")) {
+        Serial.println("Automatic capture above 2.0 V; rearmed at or below 1.9 V. Commands: help");
       } else {
         Serial.print("Unknown command: ");
         Serial.println(commandLine);
@@ -288,7 +289,7 @@ void setup() {
     Serial.println("Yahboom camera ready.");
   }
 
-  Serial.println("System ready. Type 'send' in Serial Monitor to send a photo and measurement.");
+  Serial.println("System ready. Automatic photo and measurement above 2.0 V; rearmed at or below 1.9 V.");
 }
 
 
@@ -301,5 +302,27 @@ void loop() {
     Serial.println("Wi-Fi disconnected. Reconnecting...");
     WiFi.reconnect();
     delay(1000);
+  }
+
+  unsigned long now = millis();
+  if (now - lastLdrSampleMs < LDR_SAMPLE_INTERVAL_MS) return;
+  lastLdrSampleMs = now;
+
+  int ldrValue = readLDR();
+  float voltage = ldrValue * (3.3f / 4095.0f);
+  if (!ldrTriggerArmed) {
+    if (voltage <= LDR_REARM_VOLTAGE) {
+      ldrTriggerArmed = true;
+      Serial.println("LDR at or below 1.9 V; ready for next capture.");
+    }
+    return;
+  }
+
+  if (voltage > LDR_TRIGGER_VOLTAGE && cameraReady &&
+      WiFi.status() == WL_CONNECTED) {
+    // Latch before blocking camera/HTTP work to prevent repeated uploads.
+    ldrTriggerArmed = false;
+    Serial.printf("LDR threshold exceeded: %.3f V.\n", voltage);
+    sendPhotoAndMeasurement(ldrValue, voltage);
   }
 }
