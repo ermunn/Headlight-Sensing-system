@@ -5,7 +5,7 @@
 #include "ybcam.h"
 
 // -------------------- LDR CONFIGURATION --------------------
-const int LDR_PIN = 4;
+const int LDR_PIN = 34;
 
 // -------------------- SERVER CONFIGURATION --------------------
 // Flask API deployed on Vercel. It saves each measurement to the Neon database.
@@ -272,6 +272,7 @@ void setup() {
   delay(500);
 
   analogReadResolution(12);
+  pinMode(LDR_PIN, INPUT);
 
   Serial.println("\nESP32 LDR Monitoring System");
 
