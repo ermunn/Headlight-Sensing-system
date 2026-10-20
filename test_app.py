@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from unittest.mock import Mock, patch
 
 
 class FakeCursor:
@@ -67,6 +68,36 @@ class MeasurementApiTest(unittest.TestCase):
         self.app_module = importlib.import_module("app")
         self.app_module.app.config["TESTING"] = True
         self.client = self.app_module.app.test_client()
+
+    def test_photo_upload_uses_installed_blob_sdk_and_saves_metadata(self):
+        image = b"\xff\xd8test-image\xff\xd9"
+        blob = types.SimpleNamespace(
+            url="https://example.com/photo.jpg", pathname="headlight-photos/test.jpg"
+        )
+        connection = Mock()
+        cursor = connection.cursor.return_value
+        cursor.fetchone.return_value = (7, 42, "2026-10-20 12:00:00")
+
+        # Patch the real installed SDK function so an invalid import fails this test.
+        with patch.dict(os.environ, {"PHOTO_UPLOAD_TOKEN": "test-upload-token"}), \
+                patch("vercel.blob.sync.put_blob", return_value=blob) as upload, \
+                patch.object(self.app_module, "get_db_connection", return_value=connection):
+            response = self.client.post(
+                "/api/photos", data=image, content_type="image/jpeg",
+                headers={"X-Upload-Token": "test-upload-token", "X-Plate-Number": "ESP32_TEST"},
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["photo_url"], blob.url)
+        self.assertEqual(response.get_json()["measurement_id"], 42)
+        upload.assert_called_once()
+        self.assertEqual(upload.call_args.args[1], image)
+        self.assertEqual(upload.call_args.kwargs["access"], "public")
+        self.assertEqual(cursor.execute.call_args.args[1], (
+            "ESP32_TEST", "ESP32_TEST", blob.url, blob.pathname, len(image)
+        ))
+        connection.commit.assert_called_once()
+        connection.close.assert_called_once()
 
     def test_sensor_post_persists_measurement_and_returns_created_payload(self):
         response = self.client.post(

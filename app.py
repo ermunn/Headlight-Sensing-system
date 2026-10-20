@@ -133,11 +133,11 @@ def api_upload_photo():
 		return jsonify({"success": False, "error": "Request body is not a valid JPEG"}), 400
 
 	try:
-		from vercel.blob import BlobClient
+		from vercel.blob.sync import put_blob
 
 		plate_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", plate_number)[:64] or "unknown"
 		pathname = f"headlight-photos/{plate_slug}/{uuid.uuid4().hex}.jpg"
-		blob = BlobClient().put(
+		blob = put_blob(
 			pathname,
 			image_bytes,
 			access="public",
