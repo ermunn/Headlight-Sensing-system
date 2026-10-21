@@ -187,11 +187,9 @@ def add_measurement():
 
 	plate_number = request.form["plate_number"]
 	uv_value = float(request.form["uv_value"])
-	unit = request.form["unit"]
-	limit_value = float(request.form["limit_value"])
 
 	try:
-		insert_measurement(plate_number, uv_value, unit, limit_value)
+		insert_measurement(plate_number, uv_value)
 	except (psycopg.Error, RuntimeError) as error:
 		return f"Database error: {error}", 500
 
