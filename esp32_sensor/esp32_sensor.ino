@@ -11,15 +11,11 @@ const float LDR_REARM_VOLTAGE = 1.9f;
 const unsigned long LDR_SAMPLE_INTERVAL_MS = 100;
 
 // -------------------- SERVER CONFIGURATION --------------------
-// Flask API deployed on Vercel. It saves each measurement to the Neon database.
-const char* SERVER_URL =
-    "https://headlightsensingsystem.vercel.app/api/measurements";
-
-// Configure this endpoint on your server to accept a raw image/jpeg POST.
+// One authenticated request contains the JPEG body and LDR voltage header.
 const char* PHOTO_UPLOAD_URL =
-    "https://headlightsensingsystem.vercel.app/api/photos";
-// Set the same long random value as the Vercel PHOTO_UPLOAD_TOKEN environment variable.
-const char* PHOTO_UPLOAD_TOKEN = "___PHOTO_UPLOAD_TOKEN___hjkiuoyugvbjn89y765476879809uiHJBHVGFYTGHUJBHMIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjEwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAw";
+    "https://headlightsensingsystem.vercel.app/api/captures";
+// Define this in a local secrets.h; never commit credentials.
+#include "secrets.h"
 
 // Root certificate used to verify the Vercel server over HTTPS
 // (GTS Root R1, valid until 2036-06-22).
@@ -58,9 +54,6 @@ Z6tGn6D/Qqc6f1zLXbBwHSs09dR2CQzreExZBfMzQsNhFRAbd03OIozUhfJFfbdT
 bP6MvPJwNQzcmRk13NfIRmPVNnGuV/u3gm3c
 -----END CERTIFICATE-----
 )EOF";
-
-// Temporary plate number for testing
-const char* PLATE_NUMBER = "ESP32_TEST";
 
 // Yahboom camera wiring: camera TX -> ESP32 GPIO16, camera RX -> GPIO17.
 const int CAM_RX_PIN = 16;
@@ -113,68 +106,6 @@ int readLDR() {
 }
 
 
-// -------------------- SEND DATA TO FLASK API (VERCEL) --------------------
-bool sendMeasurement(int ldrValue, float voltage) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi disconnected. Cannot send data.");
-    return false;
-  }
-
-  // HTTPS connection, verified against ROOT_CA
-  WiFiClientSecure client;
-  client.setCACert(ROOT_CA);
-
-  HTTPClient http;
-
-  if (!http.begin(client, SERVER_URL)) {
-    Serial.println("ERROR could not initialize measurement request.");
-    return false;
-  }
-  http.addHeader("Content-Type", "application/json");
-
-  // HTTPS handshake plus a cold server start can take several seconds
-  http.setConnectTimeout(10000);
-  http.setTimeout(15000);
-
-  // uv_value is currently used to store the LDR voltage.
-  String jsonData = "{";
-  jsonData += "\"plate_number\":\"";
-  jsonData += PLATE_NUMBER;
-  jsonData += "\",";
-  jsonData += "\"uv_value\":";
-  jsonData += String(voltage, 3);
-  jsonData += "}";
-
-  Serial.println("\nSending measurement...");
-  Serial.print("LDR raw value: ");
-  Serial.println(ldrValue);
-
-  Serial.print("LDR voltage: ");
-  Serial.println(voltage, 3);
-
-  Serial.print("JSON: ");
-  Serial.println(jsonData);
-
-  int httpResponseCode = http.POST(jsonData);
-
-  Serial.print("HTTP response code: ");
-  Serial.println(httpResponseCode);
-
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-
-    Serial.println("Server response:");
-    Serial.println(response);
-  } else {
-    Serial.print("HTTP error: ");
-    Serial.println(http.errorToString(httpResponseCode));
-  }
-
-  http.end();
-  return httpResponseCode >= 200 && httpResponseCode < 300;
-}
-
-
 // -------------------- CAPTURE AND UPLOAD PHOTO --------------------
 void sendPhotoAndMeasurement(int ldrValue, float voltage) {
   if (!cameraReady) {
@@ -201,11 +132,7 @@ void sendPhotoAndMeasurement(int ldrValue, float voltage) {
     return;
   }
 
-  // Save the reading that triggered capture so the photo links to that event.
-  if (!sendMeasurement(ldrValue, voltage)) {
-    Serial.println("ERROR measurement failed; photo upload cancelled. Waiting for next threshold crossing.");
-    return;
-  }
+  Serial.printf("LDR raw: %d; voltage: %.3f V\n", ldrValue, voltage);
 
   WiFiClientSecure client;
   client.setCACert(ROOT_CA);
@@ -219,8 +146,7 @@ void sendPhotoAndMeasurement(int ldrValue, float voltage) {
   }
 
   http.addHeader("Content-Type", "image/jpeg");
-  http.addHeader("X-Plate-Number", PLATE_NUMBER);
-  http.addHeader("X-Photo-Number", String(photoNumber + 1));
+  http.addHeader("X-LDR-Value", String(voltage, 3));
   http.addHeader("X-Upload-Token", PHOTO_UPLOAD_TOKEN);
   Serial.printf("Uploading JPEG (%lu bytes)...\n", (unsigned long)frame.len);
   int status = http.POST(frame.data, frame.len);
@@ -231,12 +157,12 @@ void sendPhotoAndMeasurement(int ldrValue, float voltage) {
       ++photoNumber;
       Serial.println("DONE measurement and photo sent.");
     } else {
-      Serial.println("ERROR measurement saved, but photo upload failed.");
+      Serial.println("ERROR capture upload failed; measurement was not confirmed.");
     }
   } else {
     Serial.print("Upload error: ");
     Serial.println(http.errorToString(status));
-    Serial.println("ERROR measurement saved, but photo upload failed.");
+    Serial.println("ERROR capture upload failed; measurement was not confirmed.");
   }
   http.end();
 }

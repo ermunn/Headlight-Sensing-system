@@ -2,6 +2,11 @@ import os
 import re
 import hmac
 import uuid
+import math
+import json
+import base64
+from urllib.request import Request, urlopen
+from urllib.parse import urlencode
 
 from flask import (
 	Flask, render_template, request, redirect, jsonify, Response, abort
@@ -106,6 +111,34 @@ def home():
 	return render_template("index.html", measurements=measurements)
 
 
+def recognize_plate(image_bytes):
+	"""Optional server-side OCR; capture remains available if recognition fails."""
+	token = os.getenv("PLATE_RECOGNIZER_TOKEN", "").strip()
+	if not token:
+		return "Танигдаагүй", "not_configured"
+	try:
+		payload = urlencode({"upload": base64.b64encode(image_bytes).decode("ascii")}).encode()
+		ocr_request = Request(
+			"https://api.platerecognizer.com/v1/plate-reader/",
+			data=payload,
+			headers={"Authorization": f"Token {token}", "Content-Type": "application/x-www-form-urlencoded"},
+			method="POST",
+		)
+		with urlopen(ocr_request, timeout=10) as response:
+			results = json.load(response).get("results", [])
+		if len(results) != 1:
+			return "Танигдаагүй", "not_recognized"
+		result = results[0]
+		plate = str(result.get("plate", "")).strip().upper()
+		if not plate or len(plate) > 64 or float(result.get("score", 0)) < 0.8:
+			return "Танигдаагүй", "not_recognized"
+		return plate, "recognized"
+	except Exception:
+		app.logger.warning("Plate recognition unavailable; saving unrecognized capture")
+		return "Танигдаагүй", "unavailable"
+
+
+@app.route("/api/captures", methods=["POST"])
 @app.route("/api/photos", methods=["POST"])
 def api_upload_photo():
 	"""Store a raw JPEG in Vercel Blob and link it to the plate's latest measurement."""
@@ -120,8 +153,17 @@ def api_upload_photo():
 	if content_type != "image/jpeg":
 		return jsonify({"success": False, "error": "Content-Type must be image/jpeg"}), 415
 
+	is_capture = request.path == "/api/captures"
+	voltage = None
+	if is_capture:
+		try:
+			voltage = float(request.headers.get("X-LDR-Value", ""))
+		except (TypeError, ValueError):
+			return jsonify({"success": False, "error": "X-LDR-Value must be voltage in V"}), 400
+		if not math.isfinite(voltage) or not 0 <= voltage <= 3.3:
+			return jsonify({"success": False, "error": "Voltage must be between 0 and 3.3 V"}), 400
 	plate_number = request.headers.get("X-Plate-Number", "").strip()
-	if not plate_number or len(plate_number) > 64:
+	if not is_capture and (not plate_number or len(plate_number) > 64):
 		return jsonify({"success": False, "error": "A valid X-Plate-Number header is required"}), 400
 
 	max_photo_bytes = 4_400_000
@@ -133,6 +175,9 @@ def api_upload_photo():
 		return jsonify({"success": False, "error": "JPEG is empty or exceeds the 4.4 MB limit"}), 413
 	if not image_bytes.startswith(b"\xff\xd8") or not image_bytes.endswith(b"\xff\xd9"):
 		return jsonify({"success": False, "error": "Request body is not a valid JPEG"}), 400
+
+	if is_capture:
+		plate_number, recognition_status = recognize_plate(image_bytes)
 
 	try:
 		from vercel.blob.sync import put_blob
@@ -150,27 +195,34 @@ def api_upload_photo():
 		app.logger.exception("Photo upload to Vercel Blob failed")
 		return jsonify({"success": False, "error": "Could not store photo"}), 502
 
-	conn = get_db_connection()
-	cursor = conn.cursor()
 	try:
-		cursor.execute("""
-			INSERT INTO photos
-			(measurement_id, plate_number, photo_url, pathname, content_type, file_size)
-			VALUES (
-				(SELECT id FROM measurements WHERE plate_number = %s ORDER BY measured_at DESC LIMIT 1),
-				%s, %s, %s, 'image/jpeg', %s
-			)
-			RETURNING id, measurement_id, captured_at
-		""", (plate_number, plate_number, blob.url, blob.pathname, len(image_bytes)))
-		photo_id, measurement_id, captured_at = cursor.fetchone()
-		conn.commit()
-	except (psycopg.Error, RuntimeError) as error:
-		conn.rollback()
-		app.logger.exception("Could not save photo metadata")
+		with get_db_connection() as conn:
+			with conn.cursor() as cursor:
+				if is_capture:
+					cursor.execute("""
+						INSERT INTO measurements
+						(plate_number, measured_at, uv_value, unit, limit_value, status)
+						VALUES (%s, NOW(), %s, 'V', %s, %s) RETURNING id
+					""", (plate_number, voltage, DEFAULT_LIMIT_VALUE,
+					      measurement_status(voltage, DEFAULT_LIMIT_VALUE)))
+					measurement_id = cursor.fetchone()[0]
+				else:
+					cursor.execute(
+						"SELECT id FROM measurements WHERE plate_number = %s ORDER BY measured_at DESC LIMIT 1",
+						(plate_number,),
+					)
+					row = cursor.fetchone()
+					measurement_id = row[0] if row else None
+				cursor.execute("""
+					INSERT INTO photos
+					(measurement_id, plate_number, photo_url, pathname, content_type, file_size)
+					VALUES (%s, %s, %s, %s, 'image/jpeg', %s)
+					RETURNING id, measurement_id, captured_at
+				""", (measurement_id, plate_number, blob.url, blob.pathname, len(image_bytes)))
+				photo_id, measurement_id, captured_at = cursor.fetchone()
+	except (psycopg.Error, RuntimeError):
+		app.logger.exception("Could not save capture metadata")
 		return jsonify({"success": False, "error": "Photo stored, but metadata could not be saved"}), 500
-	finally:
-		cursor.close()
-		conn.close()
 
 	return jsonify({
 		"success": True,
@@ -180,6 +232,7 @@ def api_upload_photo():
 		"photo_url": blob.url,
 		"captured_at": str(captured_at),
 		"file_size": len(image_bytes),
+		**({"LDR_value": voltage, "unit": "V", "recognition_status": recognition_status} if is_capture else {}),
 	}), 201
 
 @app.route("/add", methods = ["POST"])

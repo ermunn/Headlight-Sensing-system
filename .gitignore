@@ -1,4 +1,5 @@
 __pycache__/
+esp32_sensor/secrets.h
 .venv/
 .history/
 .uv-cache/
