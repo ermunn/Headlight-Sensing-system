@@ -5,7 +5,6 @@ import uuid
 import math
 import json
 import base64
-import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -111,33 +110,30 @@ def insert_measurement(plate_number, uv_value, unit=DEFAULT_UNIT, limit_value=DE
 def detect_plate(image_bytes):
     """Locate plates only. This model does not read plate text.
 
-    A temporary JPEG is used because the SDK accepts image paths.
+    Call hosted inference directly to avoid bundling local vision libraries.
     Missing credentials or inference failures do not block photo storage.
     """
     api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
     if not api_key:
         return {"status": "not_configured", "predictions": []}
 
-    image_path = None
     try:
-        from inference_sdk import InferenceHTTPClient, InferenceConfiguration
-
-        client = InferenceHTTPClient(
-            api_url="https://serverless.roboflow.com",
-            api_key=api_key,
-        ).configure(InferenceConfiguration(api_key_transport="header"))
-
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as image:
-            image.write(image_bytes)
-            image_path = image.name
-
-        result = client.infer(
-            image_path,
-            model_id=os.getenv(
-                "ROBOFLOW_MODEL_ID",
-                "computer-vision-m1xzb/mongolian-plate-instant-1",
-            ),
+        model_id = os.getenv(
+            "ROBOFLOW_MODEL_ID", "computer-vision-m1xzb/mongolian-plate-instant-1"
+        ).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+", model_id):
+            raise ValueError("Invalid Roboflow model ID")
+        inference_request = Request(
+            f"https://serverless.roboflow.com/{model_id}",
+            data=base64.b64encode(image_bytes),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
         )
+        with urlopen(inference_request, timeout=15) as response:
+            result = json.load(response)
         predictions = result.get("predictions", [])
         if not isinstance(predictions, list):
             raise ValueError("Unexpected detection response")
@@ -148,12 +144,6 @@ def detect_plate(image_bytes):
     except Exception:
         app.logger.warning("Roboflow detection unavailable; saving photo")
         return {"status": "unavailable", "predictions": []}
-    finally:
-        if image_path is not None:
-            try:
-                os.unlink(image_path)
-            except OSError:
-                app.logger.warning("Could not remove temporary detection image")
 
 
 @app.route("/")
