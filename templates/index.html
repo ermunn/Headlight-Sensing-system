@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Headlight UV Measurement</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
 </head>
 
@@ -50,7 +53,8 @@
 
 <h2>Measurements</h2>
 
-<table border= "1">
+<div class="table-container" role="region" aria-label="Measurements" tabindex="0">
+<table>
 	<tr>
 		<th>Plate</th>
 		<th>Date</th>
@@ -87,6 +91,7 @@
 	{% endfor %}
 
 </table>
+</div>
 
 </body>
 </html>
