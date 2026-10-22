@@ -40,7 +40,7 @@
 <table>
 	<tr>
 		<th>Plate</th>
-		<th>Date</th>
+		<th>Date (UTC+8)</th>
 		<th>Value</th>
 		<th>Unit</th>
 		<th>Limit</th>
@@ -51,7 +51,7 @@
 	{% for measurement in measurements %}
 		<tr>
 			<td>{{ measurement[0] }}</td>
-			<td>{{ measurement[1] }}</td>
+			<td>{{ measurement[1] | local_datetime }}</td>
 			<td>{{ measurement[2] }}</td>
 			<td>{{ measurement[3] }}</td>
 			<td>{{ measurement[4] }}</td>

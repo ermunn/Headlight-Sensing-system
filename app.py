@@ -5,6 +5,7 @@ import uuid
 import math
 import json
 import base64
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -22,6 +23,23 @@ app = Flask(__name__)
 
 DEFAULT_UNIT = "mW/cm^2"
 DEFAULT_LIMIT_VALUE = 2.000
+DISPLAY_TIMEZONE = timezone(timedelta(hours=8), name="UTC+8")
+
+
+@app.template_filter("local_datetime")
+def local_datetime(value):
+    """Display measurement timestamps in Ulaanbaatar's UTC+8 time."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    # Legacy timestamps without an offset are interpreted as UTC.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(DISPLAY_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
 
 

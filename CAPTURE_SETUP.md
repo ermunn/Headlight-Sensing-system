@@ -12,6 +12,11 @@ compatibility, with unit `V` and the server's `DEFAULT_LIMIT_VALUE` (currently
 2.000 V). Values strictly above the limit are `Fail`; others are `Pass`.
 Historical measurements keep their original units and values.
 
+The web table displays measurement dates in Ulaanbaatar time (UTC+8), with
+seconds precision. Database timestamps and API timestamp offsets are preserved;
+only the table presentation is converted. Legacy timestamps without an offset
+are treated as UTC for display.
+
 The photo and measurement are inserted in one database transaction and linked
 by the new measurement ID. No plate number is sent by the ESP32. The older
 `/api/measurements` and `/api/photos` interfaces remain available.
