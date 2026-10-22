@@ -108,41 +108,23 @@ def insert_measurement(plate_number, uv_value, unit=DEFAULT_UNIT, limit_value=DE
 
 
 def detect_plate(image_bytes):
-    """Locate plates only. This model does not read plate text.
-
-    Call hosted inference directly to avoid bundling local vision libraries.
-    Missing credentials or inference failures do not block photo storage.
-    """
+    """Locate plates with the published Workflow; failures do not block storage."""
     api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
     if not api_key:
         return {"status": "not_configured", "predictions": []}
 
     try:
-        model_id = os.getenv(
-            "ROBOFLOW_MODEL_ID", "computer-vision-m1xzb/mongolian-plate-instant-1"
-        ).strip()
-        if not re.fullmatch(r"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+", model_id):
-            raise ValueError("Invalid Roboflow model ID")
-        inference_request = Request(
-            f"https://serverless.roboflow.com/{model_id}",
-            data=base64.b64encode(image_bytes),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            method="POST",
-        )
-        with urlopen(inference_request, timeout=15) as response:
-            result = json.load(response)
-        predictions = result.get("predictions", [])
-        if not isinstance(predictions, list):
-            raise ValueError("Unexpected detection response")
+        from roboflow_workflow import run_plate_workflow, OUTPUT_NAMES
+
+        result = run_plate_workflow(image_bytes)
+        predictions = [box for name in OUTPUT_NAMES
+                       for box in result[0][name]["predictions"]]
         return {
             "status": "detected" if predictions else "not_detected",
             "predictions": predictions,
         }
     except Exception:
-        app.logger.warning("Roboflow detection unavailable; saving photo")
+        app.logger.warning("Roboflow Workflow unavailable; saving photo")
         return {"status": "unavailable", "predictions": []}
 
 

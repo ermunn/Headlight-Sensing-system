@@ -44,3 +44,77 @@ and check that the same row has the voltage, unit `V`, and its photo.
 If Blob upload succeeds but the database fails, the API returns 500 and the
 database transaction rolls back; an unused Blob can remain. Do not blindly
 retry ambiguous timeouts: this endpoint does not yet deduplicate requests.
+
+## Roboflow plate detection
+
+Both photo endpoints run the published single-image Workflow before storage.
+`roboflow_workflow.py` exposes `run_plate_workflow(image)` for image bytes, a
+local image path, or an HTTPS URL. The return value is a list containing one
+dictionary per image, keyed by the output names in `roboflow_workflow.json`.
+The current Workflow only locates plates; Plate Recognizer still supplies OCR.
+
+Setup uses the existing Python environment and dotenv configuration:
+
+1. The client requires `inference-sdk==1.8.1`, recorded in `requirements.txt`.
+   It was already installed in the development environment. Its dependencies
+   include native vision packages; review installation requirements before
+   provisioning a fresh environment.
+2. Set `ROBOFLOW_API_KEY` in the local ignored `.env` or in Vercel environment
+   variables. Obtain it at https://app.roboflow.com/settings/api . Never put
+   this key in firmware, frontend code, URLs, logs, or request bodies.
+3. Redeploy to apply the server configuration. `ROBOFLOW_MODEL_ID` is no longer
+   used; the workspace and Workflow slug come from the checked-in MCP contract.
+
+The published Workflow is
+`emukazol-gmail-com/mongolian-plate-vmongolian-plate-fbyll-1-rfdetr-small-t1-logic`.
+Its exact inputs and outputs were fetched through Roboflow MCP `workflows_get`:
+one `InferenceImage` named `image`, no runtime parameters, and one `JsonField`
+output named `predictions`. The real output is
+`[{"predictions": {"image": {"width": 1200, "height": 675}, "predictions": [...]}}]`.
+The MCP response fixture is `tests/fixtures/roboflow_workflow_response.json`.
+Its source is the user-selected sample image:
+https://soyacincau.com/wp-content/uploads/2024/09/malaysia-ev-plate-jpjeplate02.jpg .
+This Malaysian sample verifies the integration, not accuracy on Mongolian plates.
+
+Authentication uses only `Authorization: Bearer`. The SDK is configured with
+`InferenceConfiguration(api_key_transport="header")`. SDK 1.8.1 has no timeout
+option for synchronous Workflow calls, so a scoped client subclass overrides
+its request hook while retaining `run_workflow` and SDK output decoding.
+The HTTP connect/read timeouts are 5/15 seconds per attempt. Timeouts, connection
+failures, HTTP 408/429 and 5xx responses retry twice, waiting 0.5 then 1 second.
+These are socket timeouts, not a total wall-clock deadline; allow for all three
+attempts plus OCR and storage when configuring deployment request duration.
+No build or deployment settings were changed for this integration.
+
+The client raises `WorkflowConfigurationError`, `WorkflowRequestError`, or
+`WorkflowResponseError`. The upload API keeps its existing `not_configured`,
+`detected`, `not_detected`, and `unavailable` detection statuses; inference
+failure does not block saving a photo. Only box coordinates, class and confidence
+are returned to the caller; raw polygon points and unused metadata are discarded.
+There are no image outputs in the current contract. Unexpected image-shaped
+output fails validation and is never logged or returned as a base64 payload.
+
+Run isolated regression tests:
+
+```powershell
+python -m unittest test_detection test_captures -v
+```
+
+Run the real, billable single-image smoke test with the configured API key:
+
+```powershell
+$env:ROBOFLOW_SMOKE_IMAGE = 'https://soyacincau.com/wp-content/uploads/2024/09/malaysia-ev-plate-jpjeplate02.jpg'
+python -m unittest test_detection.WorkflowSmokeTest -v
+Remove-Item Env:ROBOFLOW_SMOKE_IMAGE
+```
+
+For future developers and coding agents: before changing this integration,
+fetch the published definition with MCP `workflows_get`, then run
+`workflows_run` on an approved sample. Refresh the contract and response fixture
+from those results; do not guess output names or add undeclared parameters.
+Keep header-only auth, bounded retries, and the upload failure fallback.
+Recheck the scoped request hook against the SDK when upgrading it. If image
+outputs are added, decode them into safely named files rather than logging
+or returning base64. Video requires a separately chosen WebRTC integration.
+No README or coding-agent instruction files existed in this repository at
+integration time; this existing setup document also provides developer guidance.

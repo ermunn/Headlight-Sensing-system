@@ -1,0 +1,23 @@
+[
+  {
+    "predictions": {
+      "image": {
+        "width": 1200,
+        "height": 675
+      },
+      "predictions": [
+        {
+          "width": 525,
+          "height": 225,
+          "x": 576.5,
+          "y": 333.5,
+          "confidence": 0.9618217349052429,
+          "class_id": 0,
+          "class": "license plate",
+          "detection_id": "3caaacd6-a728-49ff-9846-3b6d726b5270",
+          "parent_id": "image"
+        }
+      ]
+    }
+  }
+]

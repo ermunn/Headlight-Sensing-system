@@ -13,6 +13,11 @@ class CaptureTest(unittest.TestCase):
         self.env = patch.dict(os.environ, {'PHOTO_UPLOAD_TOKEN': 'test', 'PLATE_RECOGNIZER_TOKEN': ''})
         self.env.start()
         self.addCleanup(self.env.stop)
+        detection = patch.object(app, 'detect_plate', return_value={
+            'status': 'not_configured', 'predictions': [],
+        })
+        detection.start()
+        self.addCleanup(detection.stop)
 
     def test_capture_links_photo_to_new_measurement(self):
         for plate in ('Танигдаагүй', '1234ABC'):
