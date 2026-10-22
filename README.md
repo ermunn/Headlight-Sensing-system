@@ -60,7 +60,7 @@ Neon SQL Editor эсвэл өөр PostgreSQL client ашиглан `schema.sql`-
 python app.py
 ```
 
-Web: http://127.0.0.1:5000 — health check: http://127.0.0.1:5000/health .
+Web: https://headlightsensingsystem.vercel.app/ — health check: https://headlightsensingsystem.vercel.app/health .
 Бодит зураг upload хийхэд Blob token болон database шаардлагатай.
 
 ## Firmware ба deployment
