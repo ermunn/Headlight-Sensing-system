@@ -55,10 +55,11 @@ The current Workflow only locates plates; Plate Recognizer still supplies OCR.
 
 Setup uses the existing Python environment and dotenv configuration:
 
-1. The client requires `inference-sdk==1.8.1`, recorded in `requirements.txt`.
-   It was already installed in the development environment. Its dependencies
-   include native vision packages; review installation requirements before
-   provisioning a fresh environment.
+1. Install the runtime dependencies from `requirements.txt` in your existing
+   environment. The Workflow client uses lightweight `requests` HTTP calls.
+   Do not add `inference-sdk` to the Vercel runtime: its native vision dependencies
+   (including OpenCV and NumPy) caused a 612.81 MB bundle exceeding the deployment
+   limit. Model execution stays on Roboflow; no local vision libraries are needed.
 2. Set `ROBOFLOW_API_KEY` in the local ignored `.env` or in Vercel environment
    variables. Obtain it at https://app.roboflow.com/settings/api . Never put
    this key in firmware, frontend code, URLs, logs, or request bodies.
@@ -76,10 +77,9 @@ Its source is the user-selected sample image:
 https://soyacincau.com/wp-content/uploads/2024/09/malaysia-ev-plate-jpjeplate02.jpg .
 This Malaysian sample verifies the integration, not accuracy on Mongolian plates.
 
-Authentication uses only `Authorization: Bearer`. The SDK is configured with
-`InferenceConfiguration(api_key_transport="header")`. SDK 1.8.1 has no timeout
-option for synchronous Workflow calls, so a scoped client subclass overrides
-its request hook while retaining `run_workflow` and SDK output decoding.
+Authentication uses only `Authorization: Bearer`. The client posts JSON to the
+published Workflow endpoint and reads the REST response's `outputs` list.
+This preserves the MCP-grounded contract without bundling the inference SDK.
 The HTTP connect/read timeouts are 5/15 seconds per attempt. Timeouts, connection
 failures, HTTP 408/429 and 5xx responses retry twice, waiting 0.5 then 1 second.
 These are socket timeouts, not a total wall-clock deadline; allow for all three
@@ -113,8 +113,13 @@ fetch the published definition with MCP `workflows_get`, then run
 `workflows_run` on an approved sample. Refresh the contract and response fixture
 from those results; do not guess output names or add undeclared parameters.
 Keep header-only auth, bounded retries, and the upload failure fallback.
-Recheck the scoped request hook against the SDK when upgrading it. If image
+Keep the hosted HTTP client free of local inference dependencies. If image
 outputs are added, decode them into safely named files rather than logging
 or returning base64. Video requires a separately chosen WebRTC integration.
 No README or coding-agent instruction files existed in this repository at
 integration time; this existing setup document also provides developer guidance.
+
+After changing dependencies, redeploy in Vercel with **Use existing Build Cache**
+disabled so dependencies are resolved from the updated `requirements.txt`.
+Check the new build's function bundle size; the final deployed size must be
+verified by Vercel. Increasing function memory does not reduce bundle size.

@@ -25,7 +25,7 @@ class DetectionTest(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
 
-    def test_sdk_wire_contract_and_real_response(self):
+    def test_http_wire_contract_and_real_response(self):
         with patch.object(workflow.requests, "post", return_value=response()) as send:
             result = workflow.run_plate_workflow(b"jpeg")
         self.assertEqual(set(result[0]), set(workflow.OUTPUT_NAMES))

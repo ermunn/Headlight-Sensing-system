@@ -10,8 +10,6 @@ from typing import TypedDict
 from urllib.parse import urlsplit
 
 import requests
-from inference_sdk import InferenceConfiguration, InferenceHTTPClient
-from inference_sdk.http.errors import HTTPClientError
 
 
 CONTRACT = json.loads(Path(__file__).with_name("roboflow_workflow.json").read_text())
@@ -44,23 +42,13 @@ class DetectionOutput(TypedDict):
     predictions: list[dict]
 
 
-class _TimeoutWorkflowClient(InferenceHTTPClient):
-    """SDK 1.8.1 has no sync Workflow timeout option.
-
-    Override only its request hook, retaining run_workflow response decoding.
-    Keep this scoped to this client; never monkey-patch global requests state.
-    The wire/auth contract is covered by test_detection.
-    """
+class _WorkflowClient:
+    """Call hosted inference without packaging native vision libraries in Vercel."""
 
     def __init__(self, api_key):
-        super().__init__(api_url=API_URL, api_key=api_key)
         self._workflow_key = api_key
-        self.configure(InferenceConfiguration(
-            api_key_transport="header", workflow_run_retries_enabled=False,
-        ))
 
-    def _execute_workflow_request(self, *, workspace_name, workflow_id,
-                                  images, parameters, **options):
+    def run_workflow(self, *, workspace_name, workflow_id, images, parameters):
         image = images["image"]
         image_type = "url" if image.startswith("https://") else "base64"
         try:
@@ -80,7 +68,13 @@ class _TimeoutWorkflowClient(InferenceHTTPClient):
         if status != 200:
             response.close()
             raise WorkflowRequestError(f"Workflow request rejected (HTTP {status})")
-        return response
+        try:
+            envelope = response.json()
+            if not isinstance(envelope, dict):
+                raise WorkflowResponseError("Expected a Workflow response object")
+            return envelope["outputs"]
+        finally:
+            response.close()
 
 
 def _parse_outputs(result) -> list[dict[str, DetectionOutput]]:
@@ -140,7 +134,7 @@ def run_plate_workflow(image: bytes | str | Path) -> list[dict[str, DetectionOut
         if not data or len(data) > 4_400_000:
             raise WorkflowConfigurationError("Image must contain 1 to 4,400,000 bytes")
         encoded = base64.b64encode(data).decode("ascii")
-    client = _TimeoutWorkflowClient(key)
+    client = _WorkflowClient(key)
     for attempt in range(3):
         try:
             result = client.run_workflow(
@@ -153,7 +147,7 @@ def run_plate_workflow(image: bytes | str | Path) -> list[dict[str, DetectionOut
             pass
         except (KeyError, TypeError, ValueError):
             raise WorkflowResponseError("Workflow returned malformed JSON or outputs") from None
-        except (requests.RequestException, HTTPClientError):
+        except requests.RequestException:
             raise WorkflowRequestError("Workflow request failed") from None
         if attempt < 2:
             time.sleep(0.5 * (2 ** attempt))
