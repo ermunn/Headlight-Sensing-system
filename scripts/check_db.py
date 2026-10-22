@@ -1,8 +1,13 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 
 def main():
 	import psycopg
+
+	load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 	try:
 		database_url = os.getenv("DATABASE_URL")
@@ -28,8 +33,8 @@ def main():
 		cursor.close()
 		conn.close()
 
-	except (psycopg.Error, RuntimeError) as e:
-		print(f"Error connecting to Neon Postgres: {e}")
+	except (psycopg.Error, RuntimeError):
+		print("Database check failed. Verify DATABASE_URL and network access.")
 
 
 if __name__ == "__main__":

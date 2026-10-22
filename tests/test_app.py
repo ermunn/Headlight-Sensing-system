@@ -1,9 +1,9 @@
-import importlib
 import os
-import sys
 import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
+
+import app
 
 
 class FakeCursor:
@@ -52,21 +52,23 @@ class MeasurementApiTest(unittest.TestCase):
     def setUp(self):
         self.connections = []
 
-        fake_psycopg = types.SimpleNamespace()
-        fake_psycopg.Error = Exception
-
         def connect(conninfo=None, **kwargs):
             connection = FakeConnection()
             self.connections.append(connection)
             return connection
 
-        fake_psycopg.connect = connect
-        sys.modules["psycopg"] = fake_psycopg
-        os.environ["DATABASE_URL"] = "postgresql://test:test@example.com/test"
-
-        sys.modules.pop("app", None)
-        self.app_module = importlib.import_module("app")
+        connection_patch = patch.object(app.psycopg, "connect", side_effect=connect)
+        connection_patch.start()
+        self.addCleanup(connection_patch.stop)
+        environment = patch.dict(os.environ, {
+            "DATABASE_URL": "postgresql://test:test@example.com/test",
+            "ROBOFLOW_API_KEY": "",
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.app_module = app
         self.app_module.app.config["TESTING"] = True
+        self.addCleanup(self.app_module.app.config.update, TESTING=False)
         self.client = self.app_module.app.test_client()
 
     def test_photo_upload_uses_installed_blob_sdk_and_saves_metadata(self):
@@ -74,9 +76,9 @@ class MeasurementApiTest(unittest.TestCase):
         blob = types.SimpleNamespace(
             url="https://example.com/photo.jpg", pathname="headlight-photos/test.jpg"
         )
-        connection = Mock()
-        cursor = connection.cursor.return_value
-        cursor.fetchone.return_value = (7, 42, "2026-10-20 12:00:00")
+        connection = MagicMock()
+        cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cursor.fetchone.side_effect = [(42,), (7, 42, "2026-10-20 12:00:00")]
 
         # Patch the real installed SDK function so an invalid import fails this test.
         with patch.dict(os.environ, {"PHOTO_UPLOAD_TOKEN": "test-upload-token"}), \
@@ -92,12 +94,12 @@ class MeasurementApiTest(unittest.TestCase):
         self.assertEqual(response.get_json()["measurement_id"], 42)
         upload.assert_called_once()
         self.assertEqual(upload.call_args.args[1], image)
-        self.assertEqual(upload.call_args.kwargs["access"], "public")
+        self.assertEqual(upload.call_args.kwargs["access"], "private")
         self.assertEqual(cursor.execute.call_args.args[1], (
-            "ESP32_TEST", "ESP32_TEST", blob.url, blob.pathname, len(image)
+            42, "ESP32_TEST", blob.url, blob.pathname, len(image)
         ))
-        connection.commit.assert_called_once()
-        connection.close.assert_called_once()
+        connection.__exit__.assert_called_once()
+        self.assertIsNone(connection.__exit__.call_args.args[0])
 
     def test_sensor_post_persists_measurement_and_returns_created_payload(self):
         response = self.client.post(
@@ -114,14 +116,14 @@ class MeasurementApiTest(unittest.TestCase):
                 "plate_number": "UBА1234",
                 "uv_value": 0.75,
                 "unit": "mW/cm^2",
-                "limit_value": 1.0,
+                "limit_value": 2.0,
                 "status": "Pass",
             },
         )
         self.assertTrue(self.connections[0].committed)
         query, params = self.connections[0].queries[0]
         self.assertIn("INSERT INTO measurements", query)
-        self.assertEqual(params, ("UBА1234", 0.75, "mW/cm^2", 1.0, "Pass"))
+        self.assertEqual(params, ("UBА1234", 0.75, "mW/cm^2", 2.0, "Pass"))
 
     def test_sensor_post_rejects_bad_payload_without_database_write(self):
         response = self.client.post("/api/measurements", json={"uv_value": "bad"})

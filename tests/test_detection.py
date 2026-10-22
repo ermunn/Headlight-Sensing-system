@@ -9,7 +9,7 @@ import requests
 import app
 import roboflow_workflow as workflow
 
-SAMPLE = json.loads(Path(__file__).with_name("tests").joinpath(
+SAMPLE = json.loads(Path(__file__).parent.joinpath(
     "fixtures/roboflow_workflow_response.json").read_text())
 
 

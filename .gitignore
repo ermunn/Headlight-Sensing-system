@@ -1,10 +1,32 @@
-__pycache__/
-esp32_sensor/secrets.h
+# Python environments and generated files
 .venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Credentials: commit only the templates
+.env
+.env.*
+!.env.example
+esp32_sensor/secrets.h
+
+# Local tooling and deployment artifacts
 .history/
 .uv-cache/
 .vercel/
-.env
-.env.*
-.vercel
-.env*
+.idea/
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local logs
+*.log

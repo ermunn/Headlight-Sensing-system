@@ -41,7 +41,7 @@ Recognition accuracy for actual Mongolian plates needs hardware/photo testing.
 
 ## Verification
 
-Run `python -m unittest test_captures -v` for isolated tests with mocked services.
+Run `python -m unittest tests.test_captures -v` for isolated tests with mocked services.
 On hardware, cross the existing 2.0 V trigger after rearming at or below 1.9 V.
 Serial Monitor should show HTTP 201 and a measurement ID. Refresh the website
 and check that the same row has the voltage, unit `V`, and its photo.
@@ -102,14 +102,14 @@ output fails validation and is never logged or returned as a base64 payload.
 Run isolated regression tests:
 
 ```powershell
-python -m unittest test_detection test_captures -v
+python -m unittest discover -s tests -v
 ```
 
 Run the real, billable single-image smoke test with the configured API key:
 
 ```powershell
 $env:ROBOFLOW_SMOKE_IMAGE = 'https://soyacincau.com/wp-content/uploads/2024/09/malaysia-ev-plate-jpjeplate02.jpg'
-python -m unittest test_detection.WorkflowSmokeTest -v
+python -m unittest tests.test_detection.WorkflowSmokeTest -v
 Remove-Item Env:ROBOFLOW_SMOKE_IMAGE
 ```
 
