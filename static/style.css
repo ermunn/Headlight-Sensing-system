@@ -23,14 +23,14 @@ h1 {
 
 h2 {
 	margin: 24px 0 16px;
-	font-size: 1.25rem;
+	font-size: 1.5rem;
 }
 
 form {
 	max-width: 560px;
 	padding: 24px;
 	background: #fff;
-	border: 1px solid #cbd5e1;
+	border: 20px solid #cbd5e1;
 	border-radius: 12px;
 }
 
