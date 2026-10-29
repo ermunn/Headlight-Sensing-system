@@ -92,3 +92,6 @@ Live smoke test default-оор алгасагдана; ажиллуулах за
 [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md)-ийг уншина уу.
 Төсөл [MIT License](LICENSE)-тэй. External services, models, dependencies-ийн
 өөрсдийн нөхцөл хэвээр үйлчилнэ; license нь API access эрх олгохгүй.
+
+
+//.\.venv\Scripts\python.exe -m flask --app app run --debug//
