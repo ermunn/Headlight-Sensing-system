@@ -27,11 +27,13 @@ h2 {
 }
 
 form {
+	margin: 50px auto;
 	max-width: 560px;
 	padding: 24px;
 	background: #fff;
 	border: 20px solid #cbd5e1;
 	border-radius: 12px;
+	justify-content: center;
 }
 
 label {
