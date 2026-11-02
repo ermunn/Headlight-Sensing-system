@@ -1,7 +1,7 @@
 <!--dulguunuu myagaaa ...-->
 <!--dhn neg comment bicij vzew-->
 
-<!DOCTYPE html>
+<!--<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="UTF-8">
@@ -37,7 +37,7 @@
 
 <hr>
 
-<h2>Measurements</h2>
+<h2>Хэмжигдэхүүн</h2>
 
 <div class="table-container" role="region" aria-label="Measurements" tabindex="0">
 <table>
@@ -80,5 +80,169 @@
 </div>
 
 </body>
-</html>
+</html>-->
 
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Headlight Measurement System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page-shell">
+
+    <header class="hero">
+        <div class="hero-copy">
+
+            <div class="eyebrow">
+                <span class="pulse-dot"></span>
+                HEADLIGHT MONITORING
+            </div>
+
+            <h1>Headlight <span>Measurement</span> System</h1>
+            <p class="subtitle">Vehicle headlight measurement dashboard</p>
+
+            <section class="entry-section">
+                <h2>
+                    <span class="section-symbol">+</span>
+                    Add Measurement
+                </h2>
+
+                <form action="/add" method="POST" class="measurement-form">
+
+                    <div class="field-grid">
+
+                        <div class="field">
+                            <label for="plate_number">Plate Number</label>
+                            <input
+                                id="plate_number"
+                                type="text"
+                                name="plate_number"
+                                placeholder="Enter plate number"
+                                required>
+                        </div>
+
+                        <div class="field">
+                            <label for="uv_value">UV Value</label>
+
+                            <div class="input-unit">
+                                <input
+                                    id="uv_value"
+                                    type="number"
+                                    name="uv_value"
+                                    step="0.001"
+                                    placeholder="Enter UV value"
+                                    required>
+                                <span>mW/cm²</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <button type="submit" class="save-button">
+                        SAVE MEASUREMENT
+                    </button>
+
+                </form>
+            </section>
+
+        </div>
+    </header>
+
+    <main>
+        <section class="records">
+
+            <div class="section-header">
+                <div>
+                    <div class="eyebrow">MEASUREMENT LOG</div>
+                    <h2>Measurements</h2>
+                </div>
+                <span class="records-label">Recorded results</span>
+            </div>
+
+            <div class="table-container"
+                 role="region"
+                 aria-label="Measurements"
+                 tabindex="0">
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plate</th>
+                            <th>Date (UTC+8)</th>
+                            <th>Value</th>
+                            <th>Unit</th>
+                            <th>Limit</th>
+                            <th>Status</th>
+                            <th>Photo</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for measurement in measurements %}
+                        <tr>
+                            <td class="plate-cell">
+                                {{ measurement[0] }}
+                            </td>
+
+                            <td>
+                                {{ measurement[1] | local_datetime }}
+                            </td>
+
+                            <td>{{ measurement[2] }}</td>
+                            <td>{{ measurement[3] }}</td>
+                            <td>{{ measurement[4] }}</td>
+
+                            <td>
+                                <span class="status-pill">
+                                    {{ measurement[5] }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {% if measurement[6] %}
+                                <a href="{{ url_for('show_photo', photo_id=measurement[6]) }}"
+                                   target="_blank"
+                                   rel="noopener">
+
+                                    <img
+                                        src="{{ url_for('show_photo', photo_id=measurement[6]) }}"
+                                        alt="Vehicle photo"
+                                        width="200"
+                                        loading="lazy">
+                                </a>
+                                {% else %}
+                                    <span class="no-photo">No photo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                No measurements yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        HMS • Headlight Measurement System
+    </footer>
+
+</div>
+
+</body>
+</html>
