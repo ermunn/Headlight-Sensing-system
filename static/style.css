@@ -199,7 +199,7 @@ body {
         linear-gradient(
             90deg,
             #050e17 0%,
-            #050e17 23%,
+            #050a10 23%,
             rgba(5,14,23,0.85) 40%,
             rgba(5,14,23,0.1) 75%
         ),
@@ -533,6 +533,7 @@ td img {
     }
 }
 
+<<<<<<< HEAD
 
 /* FOOTER */
 
@@ -712,4 +713,103 @@ td img {
     .footer-bottom {
         flex-direction: column;
     }
+=======
+/* DASHBOARD LAYOUT */
+
+.hms-dashboard {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.5fr);
+    align-items: start;
+    gap: 24px;
+    width: 100%;
+    margin-top: 30px;
+}
+
+.hms-analytics,
+.hms-dashboard .records {
+    min-width: 0;
+}
+
+/* NEON CHART PANEL */
+
+
+.nav-buttons {
+    display: flex;
+    gap: 15px;
+    margin: 25px 0;
+}
+
+.nav-buttons button {
+    padding: 12px 30px;
+    background: #071a24;
+    border: 1px solid #00d9ff;
+    border-radius: 8px;
+    color: #8ceeff;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 0 12px #00d9ff55;
+    transition: 0.3s;
+}
+
+.nav-buttons button:hover {
+    background: #00d9ff;
+    color: #00131b;
+    box-shadow: 0 0 25px #00d9ff;
+}
+
+/* Page switching */
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+/* Charts */
+.chart-title {
+    color: #9defff;
+    text-shadow: 0 0 15px #00d9ff;
+    margin-bottom: 30px;
+}
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 25px;
+}
+
+.chart-card {
+    background: linear-gradient(
+        145deg,
+        #071827,
+        #03101a
+    );
+    border: 1px solid #00d9ff66;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow:
+        0 0 15px #00d9ff33,
+        inset 0 0 15px #00d9ff11;
+    height: 350px;
+    min-width: 0;
+    position: relative;
+}
+
+.chart-card h3 {
+    color: #a7eaff;
+    font-size: 17px;
+    margin-bottom: 20px;
+}
+
+.chart-card canvas {
+    width: 100% !important;
+    height: 260px !important;
+}
+
+@media (max-width: 768px) {
+    .chart-grid {
+        grid-template-columns: 1fr;
+    }
+>>>>>>> e844092 (Update Data Charts)
 }
